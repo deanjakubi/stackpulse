@@ -1,60 +1,88 @@
-const { renderPRRow, renderSummary } = require('./display');
-const { formatRateLimitSummary, isRateLimitLow } = require('./rateLimit');
+const { colorize, renderSummary } = require('./display');
+const { formatRateLimitSummary } = require('./rateLimit');
+const { formatMetrics } = require('./metrics');
 
 /**
- * Prints a section header to stdout.
- * @param {string} repoName
+ * Print a repo section header.
+ * @param {string} repo  "owner/name"
  */
-function printRepoHeader(repoName) {
-  console.log(`\n${'─'.repeat(60)}`);
-  console.log(`  📦 ${repoName}`);
-  console.log('─'.repeat(60));
+function printRepoHeader(repo) {
+  console.log('\n' + colorize(`=== ${repo} ===`, 'cyan'));
 }
 
 /**
- * Prints all PR rows for a single repo.
- * @param {string} repoName
+ * Print all PR rows for a single repo.
  * @param {Array} prs
+ * @param {Function} renderRow  renderPRRow from display.js
  */
-function printRepoPRs(repoName, prs) {
-  printRepoHeader(repoName);
-  if (!prs || prs.length === 0) {
-    console.log('  No open pull requests.');
+function printRepoPRs(prs, renderRow) {
+  if (prs.length === 0) {
+    console.log(colorize('  No open PRs', 'dim'));
     return;
   }
-  prs.forEach((pr) => console.log(renderPRRow(pr)));
-}
-
-/**
- * Prints the aggregate summary across all repos.
- * @param {Array<{repo: string, prs: Array}>} repoResults
- */
-function printSummary(repoResults) {
-  const allPRs = repoResults.flatMap((r) => r.prs);
-  console.log(`\n${'═'.repeat(60)}`);
-  console.log(renderSummary(allPRs));
-}
-
-/**
- * Prints a rate-limit warning if the remaining quota is low.
- * @param {object} rateLimit
- */
-function printRateLimitWarning(rateLimit) {
-  if (!rateLimit) return;
-  if (isRateLimitLow(rateLimit)) {
-    console.warn(`\n⚠️  ${formatRateLimitSummary(rateLimit)}`);
+  for (const pr of prs) {
+    console.log(renderRow(pr));
   }
 }
 
 /**
- * Main output entry point — renders everything to the terminal.
- * @param {Array<{repo: string, prs: Array}>} repoResults
- * @param {object|null} rateLimit
+ * Print the overall summary block.
+ * @param {number} totalRepos
+ * @param {number} totalPRs
  */
-function renderOutput(repoResults, rateLimit = null) {
-  repoResults.forEach(({ repo, prs }) => printRepoPRs(repo, prs));
-  printSummary(repoResults);
-  printRateLimitWarning(rateLimit);
+function printSummary(totalRepos, totalPRs) {
+  console.log('\n' + renderSummary(totalRepos, totalPRs));
 }
 
-module.exports = { printRepoHeader, printRepoPRs, printSummary, printRateLimitWarning, renderOutput };
+/**
+ * Print a rate-limit warning when remaining calls are low.
+ * @param {object} rateLimitInfo  { remaining, reset }
+ */
+function printRateLimitWarning(rateLimitInfo) {
+  if (!rateLimitInfo) return;
+  const msg = formatRateLimitSummary(rateLimitInfo);
+  if (msg) {
+    console.warn(colorize(`\n⚠  ${msg}`, 'yellow'));
+  }
+}
+
+/**
+ * Print per-run metrics derived from all repo results.
+ * @param {object} metrics  result of computeMetrics()
+ */
+function printMetrics(metrics) {
+  console.log('\n' + colorize('── Metrics ──', 'magenta'));
+  console.log(formatMetrics(metrics));
+}
+
+/**
+ * Orchestrate the full output render.
+ * @param {Array<{repo: string, prs: Array}>} repoResults
+ * @param {Function} renderRow
+ * @param {object|null} rateLimitInfo
+ * @param {object} metrics
+ */
+function renderOutput(repoResults, renderRow, rateLimitInfo, metrics) {
+  for (const { repo, prs } of repoResults) {
+    printRepoHeader(repo);
+    printRepoPRs(prs, renderRow);
+  }
+
+  const totalPRs = repoResults.reduce((sum, r) => sum + r.prs.length, 0);
+  printSummary(repoResults.length, totalPRs);
+
+  if (metrics) {
+    printMetrics(metrics);
+  }
+
+  printRateLimitWarning(rateLimitInfo);
+}
+
+module.exports = {
+  printRepoHeader,
+  printRepoPRs,
+  printSummary,
+  printRateLimitWarning,
+  printMetrics,
+  renderOutput,
+};
