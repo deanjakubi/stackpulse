@@ -1,0 +1,12 @@
+node_modules/
+yarn-error.log*
+.cache/
+*.swo
+build/
+npm-debug.log*
+.DS_Store
+Desktop.ini
+Thumbs.db
+.next/
+.env.local
+.vscode/
