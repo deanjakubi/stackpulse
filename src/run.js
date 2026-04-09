@@ -2,55 +2,54 @@
 'use strict';
 
 const { loadConfig } = require('./config');
-const { fetchAllPRs } = require('./prs');
+const { getCached, setCached } = require('./cache');
+const { fetchPRs } = require('./prs');
 const { applyFilters } = require('./filter');
-const { renderPRRow, renderSummary, colorize } = require('./display');
 const { notifyOnChanges } = require('./notify');
-const { loadSnapshot, saveSnapshot } = require('./snapshot');
-const { fetchRateLimit, formatRateLimitSummary, isRateLimitLow } = require('./rateLimit');
+const { normaliseAll } = require('./snapshot');
+const { renderOutput } = require('./output');
 
 async function run() {
   let config;
   try {
-    config = await loadConfig();
+    config = loadConfig();
   } catch (err) {
-    console.error(colorize('red', `Config error: ${err.message}`));
+    console.error(`Configuration error: ${err.message}`);
     process.exit(1);
   }
 
-  // Rate limit check before making API calls
-  try {
-    const rate = await fetchRateLimit(config);
-    const summary = formatRateLimitSummary(rate);
-    if (isRateLimitLow(rate)) {
-      console.warn(colorize('yellow', `⚠  ${summary}`));
-    } else {
-      console.log(colorize('dim', summary));
-    }
-  } catch {
-    // Non-fatal — continue even if rate limit check fails
+  const { repos, filters = {}, token } = config;
+
+  if (!repos || repos.length === 0) {
+    console.error('No repositories configured. Add repos to your config file.');
+    process.exit(1);
   }
 
-  let allPRs = [];
-  for (const repo of config.repos) {
+  const repoResults = [];
+  let rateLimit = null;
+
+  for (const repo of repos) {
     try {
-      const prs = await fetchAllPRs(repo, config);
-      allPRs = allPRs.concat(prs);
+      const { prs, rateLimit: rl } = await fetchPRs(repo, token);
+      if (rl) rateLimit = rl;
+
+      const filtered = applyFilters(prs, filters);
+      repoResults.push({ repo, prs: filtered });
+
+      const previousSnapshot = await getCached(`snapshot:${repo}`);
+      const currentSnapshot = normaliseAll(filtered);
+      await notifyOnChanges(repo, previousSnapshot, currentSnapshot);
+      await setCached(`snapshot:${repo}`, currentSnapshot);
     } catch (err) {
-      console.error(colorize('red', `Failed to fetch PRs for ${repo}: ${err.message}`));
+      console.error(`Failed to fetch PRs for ${repo}: ${err.message}`);
+      repoResults.push({ repo, prs: [] });
     }
   }
 
-  const filtered = applyFilters(allPRs, config);
-
-  const previous = await loadSnapshot(config);
-  await notifyOnChanges(previous, filtered, config);
-  await saveSnapshot(filtered, config);
-
-  console.log('');
-  filtered.forEach((pr) => console.log(renderPRRow(pr)));
-  console.log('');
-  console.log(renderSummary(filtered));
+  renderOutput(repoResults, rateLimit);
 }
 
-run();
+run().catch((err) => {
+  console.error(`Unexpected error: ${err.message}`);
+  process.exit(1);
+});
