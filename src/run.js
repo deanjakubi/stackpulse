@@ -1,55 +1,56 @@
-"use strict";
+#!/usr/bin/env node
+'use strict';
 
-const { loadConfig } = require("./config");
-const { fetchOpenPRs } = require("./prs");
-const { renderSummary } = require("./display");
+const { loadConfig } = require('./config');
+const { fetchAllPRs } = require('./prs');
+const { applyFilters } = require('./filter');
+const { renderPRRow, renderSummary, colorize } = require('./display');
+const { notifyOnChanges } = require('./notify');
+const { loadSnapshot, saveSnapshot } = require('./snapshot');
+const { fetchRateLimit, formatRateLimitSummary, isRateLimitLow } = require('./rateLimit');
 
-async function fetchAllRepos(repos, token) {
-  const tasks = repos.map(async (repo) => {
-    try {
-      const prs = await fetchOpenPRs(repo, token);
-      return { repo, prs, error: null };
-    } catch (err) {
-      return { repo, prs: [], error: err.message };
-    }
-  });
-  return Promise.all(tasks);
-}
-
-async function run(configPath) {
+async function run() {
   let config;
   try {
-    config = loadConfig(configPath);
+    config = await loadConfig();
   } catch (err) {
-    console.error(`Failed to load config: ${err.message}`);
+    console.error(colorize('red', `Config error: ${err.message}`));
     process.exit(1);
   }
 
-  const { token, repos } = config;
-
-  if (!repos || repos.length === 0) {
-    console.error("No repositories configured. Add repos to your config file.");
-    process.exit(1);
+  // Rate limit check before making API calls
+  try {
+    const rate = await fetchRateLimit(config);
+    const summary = formatRateLimitSummary(rate);
+    if (isRateLimitLow(rate)) {
+      console.warn(colorize('yellow', `⚠  ${summary}`));
+    } else {
+      console.log(colorize('dim', summary));
+    }
+  } catch {
+    // Non-fatal — continue even if rate limit check fails
   }
 
-  if (!token) {
-    console.error("No GitHub token found. Set GITHUB_TOKEN or add it to config.");
-    process.exit(1);
+  let allPRs = [];
+  for (const repo of config.repos) {
+    try {
+      const prs = await fetchAllPRs(repo, config);
+      allPRs = allPRs.concat(prs);
+    } catch (err) {
+      console.error(colorize('red', `Failed to fetch PRs for ${repo}: ${err.message}`));
+    }
   }
 
-  console.log(`Fetching PRs for ${repos.length} repo(s)...`);
+  const filtered = applyFilters(allPRs, config);
 
-  const results = await fetchAllRepos(repos, token);
-  const output = renderSummary(results);
-  console.log(output);
+  const previous = await loadSnapshot(config);
+  await notifyOnChanges(previous, filtered, config);
+  await saveSnapshot(filtered, config);
+
+  console.log('');
+  filtered.forEach((pr) => console.log(renderPRRow(pr)));
+  console.log('');
+  console.log(renderSummary(filtered));
 }
 
-module.exports = { run, fetchAllRepos };
-
-if (require.main === module) {
-  const configPath = process.argv[2] || undefined;
-  run(configPath).catch((err) => {
-    console.error("Unexpected error:", err.message);
-    process.exit(1);
-  });
-}
+run();
