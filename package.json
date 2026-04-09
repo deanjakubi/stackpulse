@@ -1,0 +1,26 @@
+{
+  "name": "stackpulse",
+  "version": "1.0.0",
+  "description": "A CLI tool that monitors and summarizes GitHub PR activity across multiple repos in one view.",
+  "main": "src/index.js",
+  "bin": {
+    "stackpulse": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "jest --coverage"
+  },
+  "dependencies": {
+    "@octokit/rest": "^20.0.2",
+    "chalk": "^4.1.2",
+    "commander": "^11.1.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}
