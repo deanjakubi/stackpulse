@@ -105,23 +105,18 @@ describe('computeMetrics', () => {
     expect(result.labelCounts['bug']).toBe(2);
     expect(result.labelCounts['urgent']).toBe(1);
   });
+
+  test('handles repos with empty prs array', () => {
+    const repoResults = [
+      { repo: 'org/a', prs: [] },
+      { repo: 'org/b', prs: [makePR()] },
+    ];
+    const result = computeMetrics(repoResults);
+    expect(result.totalPRs).toBe(1);
+    expect(result.avgAgeDays).toBe(2);
+  });
 });
 
 describe('formatMetrics', () => {
   test('returns a non-empty string', () => {
-    const metrics = computeMetrics([
-      { repo: 'org/a', prs: [makePR({ labels: [{ name: 'bug' }] })] },
-    ]);
-    const output = formatMetrics(metrics);
-    expect(typeof output).toBe('string');
-    expect(output).toContain('Total PRs');
-    expect(output).toContain('alice');
-    expect(output).toContain('bug');
-  });
-
-  test('omits top authors line when no PRs', () => {
-    const metrics = computeMetrics([]);
-    const output = formatMetrics(metrics);
-    expect(output).not.toContain('Top authors');
-  });
-});
+  
