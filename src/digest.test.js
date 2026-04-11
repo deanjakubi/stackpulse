@@ -43,6 +43,17 @@ describe('buildRepoDigest', () => {
     expect(result.total).toBe(0);
     expect(result.authors).toEqual([]);
   });
+
+  it('counts stale PRs (not updated in over 7 days)', () => {
+    const stalePR = makePR({
+      updated_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    const freshPR = makePR({
+      updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    const result = buildRepoDigest('org/repo', [stalePR, freshPR]);
+    expect(result.stale).toBe(1);
+  });
 });
 
 describe('buildDigest', () => {
