@@ -74,4 +74,16 @@ describe('cachedGithubRequestWithRetry', () => {
 
     expect(github.githubRequest).toHaveBeenCalledTimes(1);
   });
+
+  it('does not retry on 401', async () => {
+    const err = Object.assign(new Error('Unauthorized'), { statusCode: 401 });
+    cache.getCached.mockResolvedValue(null);
+    github.githubRequest.mockRejectedValue(err);
+
+    await expect(
+      cachedGithubRequestWithRetry(PATH, TOKEN, { maxRetries: 3, baseDelay: 1 })
+    ).rejects.toMatchObject({ statusCode: 401 });
+
+    expect(github.githubRequest).toHaveBeenCalledTimes(1);
+  });
 });
