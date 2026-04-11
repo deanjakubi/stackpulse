@@ -3,8 +3,20 @@ import { execSync } from 'child_process';
 const PLATFORMS = {
   darwin: 'osascript -e \'display notification "{message}" with title "StackPulse"\' ',
   linux: 'notify-send "StackPulse" "{message}"',
-  win32: 'powershell -Command "[System.Windows.Forms.MessageBox]::Show(\'{message}\', \'StackPulse\')"'
+  win32: 'powershell -Command "[System.Windows.Forms.MessageBox]::Show(\'{message}\', \'StackPulse\')"\''
 };
+
+/**
+ * Sanitise a message string for safe shell interpolation by stripping
+ * characters that could break out of the surrounding quotes.
+ * @param {string} message
+ * @returns {string}
+ */
+function sanitiseMessage(message) {
+  // Remove single quotes (used as delimiters on darwin/win32) and
+  // backticks / dollar signs that could trigger command substitution.
+  return message.replace(/['`$]/g, '');
+}
 
 /**
  * Send a desktop notification if the platform supports it.
@@ -16,7 +28,7 @@ export function sendNotification(message) {
   const template = PLATFORMS[platform];
   if (!template) return false;
 
-  const cmd = template.replace('{message}', message.replace(/'/g, ''));
+  const cmd = template.replace('{message}', sanitiseMessage(message));
   try {
     execSync(cmd, { stdio: 'ignore' });
     return true;
