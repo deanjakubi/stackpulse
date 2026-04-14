@@ -21,6 +21,11 @@ function formatPRStatus(pr) {
   return colorize("OPEN", "green");
 }
 
+/**
+ * Formats the age of a PR based on its creation date.
+ * Returns a colorized string: green for today, yellow for recent,
+ * red for older than 7 days.
+ */
 function formatAge(createdAt) {
   const created = new Date(createdAt);
   const now = new Date();
@@ -32,10 +37,14 @@ function formatAge(createdAt) {
   return colorize(`${diffDays} days ago`, "yellow");
 }
 
+function truncateTitle(title, maxLength = 50) {
+  return title.length > maxLength ? title.slice(0, maxLength - 3) + "..." : title;
+}
+
 function renderPRRow(pr, repo) {
   const status = formatPRStatus(pr);
   const age = formatAge(pr.created_at);
-  const title = pr.title.length > 50 ? pr.title.slice(0, 47) + "..." : pr.title;
+  const title = truncateTitle(pr.title);
   const author = colorize(`@${pr.user.login}`, "cyan");
   const repoLabel = colorize(`[${repo}]`, "bold");
   const prNumber = colorize(`#${pr.number}`, "gray");
@@ -68,4 +77,4 @@ function renderSummary(results) {
   return lines.join("\n");
 }
 
-module.exports = { renderSummary, renderPRRow, formatAge, formatPRStatus, colorize };
+module.exports = { renderSummary, renderPRRow, formatAge, formatPRStatus, colorize, truncateTitle };
